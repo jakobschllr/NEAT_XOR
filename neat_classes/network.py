@@ -17,6 +17,7 @@ class Network():
         self.hidden_neurons = []
         self.connections: list[Connection] = []
         self.perturbation_strength = 0.01
+    
         self.raw_fitness = None
         self.adjusted_fitness = None
 
@@ -124,6 +125,10 @@ class Network():
     def get_output_neurons(self):
         return self.output_neurons
     
+    def reset_neurons(self):
+        for neuron in self.get_all_neurons():
+            neuron.reset()
+    
     def compute_inputs(self, *inputs):
         queue = Queue()
         input_idx = 0
@@ -133,8 +138,11 @@ class Network():
             queue.put(input_neuron)
             input_idx += 1
 
+        visited_neurons = []
+
         while queue.empty() == False:
             current_neuron = queue.get()
+            visited_neurons.append(current_neuron)
             
             # Summe der gewichteten Eingaben berechnen
             weighted_sum = current_neuron.get_weighted_bias()
@@ -153,9 +161,13 @@ class Network():
                     weighted_value = connection.weight * raw_output
                     child = connection.neuron_out
                     child.add_weighted_input(weighted_value)
-                    queue.put(child)
+                    if child not in visited_neurons:
+                        queue.put(child)
 
-        return self.output_neurons[0].raw_output
+        final_output = self.output_neurons[0].raw_output
+        self.reset_neurons()
+
+        return final_output
     
     def apply_random_weight_mutation(self):
         connection = random.choice(self.connections)
@@ -178,18 +190,21 @@ class Network():
 
 
     def __str__(self):
-        output = "Connections: "
-        for connection in self.connections:
-            output += str(connection)
-        output += "Input-Neurons: "
-        for neuron in self.input_neurons:
-            output += str(neuron.id) + " "
-        output += "Hidden-Neurons: "
-        for neuron in self.hidden_neurons:
-            output += str(neuron.id) + " "
-        output += "Output-Neurons: "
-        for neuron in self.output_neurons:
-            output += str(neuron.id) + " "
+        output = "Network: "
+        # output += "Connections: "
+        # for connection in self.connections:
+        #     output += str(connection)
+        # output += "Input-Neurons: "
+        # for neuron in self.input_neurons:
+        #     output += str(neuron.id) + " "
+        # output += "Hidden-Neurons: "
+        # for neuron in self.hidden_neurons:
+        #     output += str(neuron.id) + " "
+        # output += "Output-Neurons: "
+        # for neuron in self.output_neurons:
+        #     output += str(neuron.id) + " "
+        
+        output += "Raw Fitness: " + str(self.raw_fitness)
 
         return output
     

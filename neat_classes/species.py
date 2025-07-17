@@ -5,6 +5,7 @@ from .network import Network
 from neat_classes.HistoricalMarker import HistoricalMarker
 import math
 import random
+import copy
 
 class Species():
     def __init__(self, c1, c2, c3, survival_rate):
@@ -21,29 +22,33 @@ class Species():
         self.networks.append(network)
         if self.representative == None:
             self.representative = network
+        elif network.raw_fitness != None and network.raw_fitness > self.representative.raw_fitness: # representative is always the fittest network
+            self.representative = network
 
     def calculate_total_adjusted_fitness(self):
 
         # calculate raw fitness for each network in species
         total_adjusted_fitness = 0
         for net in self.networks:
-            result1 = round(net.compute_inputs(0,0))
-            result2 = round(net.compute_inputs(0,1))
-            result3 = round(net.compute_inputs(1,0))
-            result4 = round(net.compute_inputs(1,1))
+            result1 = net.compute_inputs(0,0)
+            result2 = net.compute_inputs(0,1)
+            result3 = net.compute_inputs(1,0)
+            result4 = net.compute_inputs(1,1)
 
-            points = 0
-            if result1 == 0: points += 1
-            if result2 == 1: points += 1
-            if result3 == 1: points += 1
-            if result4 == 0: points += 1
-
-            net.raw_fitness = (points / 4) * 100
+            error = (result1 - 0)**2 + (result2 - 1)**2 + (result3 - 1)**2 + (result4 - 0)**2
+            net.raw_fitness = 1 / (1+error)
             net.adjusted_fitness = net.raw_fitness / len(self.networks)
             total_adjusted_fitness += net.adjusted_fitness
 
-        # print("Adjusted fitness sum: ", total_adjusted_fitness)
-        # print("Amount of networks: ", len(self.networks))
+
+            # print("---- Fitness Calculation ----")
+            # print("Result 1: ", result1)
+            # print("Result 2: ", result2)
+            # print("Result 3: ", result3)
+            # print("Result 4: ", result4)
+            # print("Error: ", error)
+            # print("Raw Fitness: ", net.raw_fitness)
+            # print("Adjusted Fitness: ", net.adjusted_fitness)
 
         self.total_adjusted_fitness = total_adjusted_fitness
 
@@ -51,17 +56,19 @@ class Species():
     def remove_lowperforming_networks(self):
         if len(self.networks) > 1:
             surviving_networks_count = math.floor(len(self.networks) * (self.survival_rate / 100))
-            adjusted_fitnesses = [network.adjusted_fitness for network in self.networks]
+            raw_fitnesses = [network.raw_fitness for network in self.networks]
             surviving_networks = []
 
-            while (surviving_networks_count > 0):
-                highest_value = max(adjusted_fitnesses)
-                idx_of_highest_value = adjusted_fitnesses.index(highest_value)
-                surviving_networks.append(self.networks[idx_of_highest_value])
-                adjusted_fitnesses[idx_of_highest_value] = 0
-                surviving_networks_count -= 1
-
-            self.networks = surviving_networks
+            if surviving_networks_count > 0:
+                while (surviving_networks_count > 0):
+                    highest_value = max(raw_fitnesses)
+                    idx_of_highest_value = raw_fitnesses.index(highest_value)
+                    surviving_networks.append(self.networks[idx_of_highest_value])
+                    raw_fitnesses[idx_of_highest_value] = 0
+                    surviving_networks_count -= 1
+                
+                self.networks = surviving_networks
+                self.representative = surviving_networks[0]
 
     def reset_species(self):
         self.networks = []
@@ -118,9 +125,25 @@ class Species():
                           crossover_offspring_rate,
                           new_neuron_probability,
                           new_connection_probability,
-                          hist_marker: HistoricalMarker
+                          hist_marker: HistoricalMarker,
+                          elit_nets_amount
                           ):
         children = []
+
+        # always keep the best performing networks in the species
+        #print("Elits: ") 
+        raw_fitnesses = [n.raw_fitness for n in self.networks]
+        elit_networks = []
+        for i in range(0, elit_nets_amount):
+            if i < len(self.networks):
+                max_raw_fitness = max(raw_fitnesses)
+                idx_of_max = raw_fitnesses.index(max_raw_fitness)
+                elit_networks.append(copy.deepcopy(self.networks[idx_of_max]))
+                raw_fitnesses[idx_of_max] = 0
+                #print(self.networks[i])
+                children_amount -= 1
+
+        children += elit_networks
 
         network_mutations_amount = round(children_amount * (mutation_offspring_rate / 100)) if len(self.networks) > 1 else children_amount
         crossover_amount = round(children_amount * (crossover_offspring_rate / 100)) if len(self.networks) > 1 else 0
@@ -137,14 +160,12 @@ class Species():
             child = self.mutate_network(weight_mutation_perturbation_rate, weight_mutation_random_value_rate, bias_weight_mutation_rate)
             if child != None:
                 children.append(child)
-                #print("Network mutation ", _)
     
         for _ in range(0, crossover_amount):
             # create new networks using crossovers
             child = self.crossover_networks()
             if child != None:
                 children.append(child)
-                #print("Crossover offspring creation: ",_)
    
         if len(children) == 0:
             return []
@@ -161,7 +182,7 @@ class Species():
             random_network = random.choice(children)
             random_network.mutate_with_new_connection(hist_marker)
 
-        return children
+        return children, elit_networks
 
 
     # chooses random networks from species and mutates them
@@ -260,4 +281,4 @@ class Species():
         return crossover_network
     
     def __str__(self):
-        return "[ Average adjusted fitness: " + str(self.total_adjusted_fitness) + " Network Amount: " + str(len(self.networks)) + " ]"
+        return "[ Total adjusted fitness: " + str(self.total_adjusted_fitness) + " Network Amount: " + str(len(self.networks)) + " ]"

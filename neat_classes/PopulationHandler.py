@@ -3,25 +3,26 @@ from neat_classes.HistoricalMarker import HistoricalMarker
 from .species import Species
 import random
 import time
+import copy
 
 c1 = 1.0
-c2 = 1.0
-c3 = 0.4
-species_survival_rate = 20
+c2 = 0.6
+c3 = 0.2
+species_survival_rate = 10 # percentage of fittest networks that survive each generation
+elit_nets_amount = 2 # amount of fittest networks, that are elit and are copied to the next generation
 
 mutation_offspring_rate = 80 # mutation of connection weight
 weight_mutation_perturbation_rate = 90
-weight_mutation_random_value_rate = 8
-bias_weight_mutation_rate = 2
+weight_mutation_random_value_rate = 80
+bias_weight_mutation_rate = 20
 
 crossover_offspring_rate = 20 
 gene_disabled_rate = 75 # gene stays disabled if it was disabled in either parent
 
 new_neuron_probability = 2 # percent
-new_connection_probability = 8 # percent
+new_connection_probability = 10 # percent
 
-species_similarity_threshold = 0.30 # bestimmt wie ähnlich sich netzwerke sein müssen, um zu selben Spezies zu gehören
-
+species_similarity_threshold = 0.5 # je höher, desto mehr netzwerke gehen in eine Spezies
 
 class PopulationHandler():
     def __init__(self):
@@ -50,9 +51,10 @@ class PopulationHandler():
 
     def start_evolution_process(self):
         generation_counter = 0
+        best_network = None
         while generation_counter < 100:
             # get sum of all average adjusted fitnesses of all species
-            print("****** Generation ", generation_counter, " ******")
+            print("********** Generation ", generation_counter, " **********")
             adjusted_fitness_all_species = 0
             for species in self.species:
                 species.remove_lowperforming_networks()
@@ -60,10 +62,17 @@ class PopulationHandler():
 
             new_population = []
 
+            for species in self.species:
+                print("--- Surviving Nets in Species ---")
+                for network in species.networks:
+                    print(network)
+
+            print("This generations best networks: ")
+
             # each species produces certain amount of children based on it's average adjusted fitness
             for species in self.species:
                 species_children_amount = round((species.total_adjusted_fitness / adjusted_fitness_all_species) * self.network_amount)
-                children = species.produce_offspring(
+                children, elit_networks = species.produce_offspring(
                     species_children_amount,
                     mutation_offspring_rate,
                     weight_mutation_perturbation_rate,
@@ -72,21 +81,32 @@ class PopulationHandler():
                     crossover_offspring_rate,
                     new_neuron_probability,
                     new_connection_probability,
-                    self.hist_marker
+                    self.hist_marker,
+                    elit_nets_amount
                 )
 
-                #print("--> Species produced " + str(len(children)) + " children")
                 new_population = new_population + children
+                for net in elit_networks:
+                    print(net)
+                    if best_network == None or net.raw_fitness > best_network.raw_fitness:
+                        best_network = copy.deepcopy(net)
 
-                # reset species
+            # reset species
+            for species in self.species:
                 species.reset_species()
+
+            # print("All Networks before re-speciation:")
+            # for net in new_population:
+            #     print(net)
 
             # all newly produced children have to be assigned to a species based on their compatibilty distance
             for network in new_population:
                 found_species = False
+
                 for species in self.species:
                     compatibility_dist = species.calculate_compatibility_distance(network)
-                    if compatibility_dist <= species_similarity_threshold:
+                    #print("Compatibility Distance: ", compatibility_dist)
+                    if compatibility_dist < species_similarity_threshold:
                         species.add_network(network)
                         found_species = True
                         break
@@ -98,14 +118,21 @@ class PopulationHandler():
 
             # nicht verwendete Spezien löschen
             self.species = [s for s in self.species if len(s.networks) > 0]
+
             
             # update average adjusted fitness in each species
             for species in self.species:
                 species.calculate_total_adjusted_fitness()
-            
-            print("Species: ")
-            for species in self.species:
-                print(species)
 
+            # print("All Networks after new calculation of total adjusted fitness:")
+            # for species in self.species:
+            #     for net in species.networks:
+            #         print(net)
+            
             generation_counter += 1
-            #time.sleep(0.1)
+
+        print("Best network: ", best_network)
+        print("IST: ", best_network.compute_inputs(0,0), " SOLL: 0")
+        print("IST: ", best_network.compute_inputs(0,1), " SOLL: 1")
+        print("IST: ", best_network.compute_inputs(1,0), " SOLL: 1")
+        print("IST: ", best_network.compute_inputs(1,1), " SOLL: 0")
