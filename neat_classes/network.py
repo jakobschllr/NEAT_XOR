@@ -6,6 +6,7 @@ from .neurons.neuron import Neuron
 from .connection import Connection
 from queue import Queue
 import random
+import math
 
 
 class Network():
@@ -16,10 +17,16 @@ class Network():
         self.output_neurons = []
         self.hidden_neurons = []
         self.connections: list[Connection] = []
-        self.perturbation_strength = 0.01
+        self.perturbation_strength = 0.2
     
         self.raw_fitness = None
         self.adjusted_fitness = None
+
+    def get_connection_by_id(self, id):
+        for connection in self.connections:
+            if connection.connection_id == id:
+                return connection
+        return None
 
     def initialize_minimal_network(self, hist_marker: HistoricalMarker):
         initial_neuron_id_counter = 0
@@ -129,6 +136,28 @@ class Network():
         for neuron in self.get_all_neurons():
             neuron.reset()
     
+    def get_raw_fitness(self):
+        outputs = [
+            (self.compute_inputs(0,0), 0), 
+            (self.compute_inputs(0,1), 1),
+            (self.compute_inputs(1,0), 1),
+            (self.compute_inputs(1,1), 0)
+        ]
+
+        total_error = 0
+        for out, target in outputs:
+            total_error += (out-target)**2
+
+        self.raw_fitness = 1 / (1+total_error)
+        return self.raw_fitness
+
+    def get_expected_inputs(self, neuron):
+        count = 0
+        for c in [connection for connection in self.connections if connection.enabled]:
+            if c.neuron_out.id == neuron.id:
+                count += 1
+        return count
+
     def compute_inputs(self, *inputs):
         queue = Queue()
         input_idx = 0
@@ -142,15 +171,20 @@ class Network():
 
         while queue.empty() == False:
             current_neuron = queue.get()
-            visited_neurons.append(current_neuron)
+            visited_neurons.append(current_neuron.id)
             
             # Summe der gewichteten Eingaben berechnen
             weighted_sum = current_neuron.get_weighted_bias()
             for weighted_input in current_neuron.current_weighted_inputs:
                 weighted_sum += weighted_input
 
-            # rohe Ausgabe mit Aktivierungsfunktion berechnen
-            raw_output = current_neuron.calculate_output(weighted_sum, "modified-sigmoid")
+            # für hidden und output neurons die rohe Ausgabe mit Aktivierungsfunktion berechnen
+            if current_neuron not in self.input_neurons:
+                raw_output = current_neuron.calculate_output(weighted_sum, "modified-sigmoid")
+            # für input neurons wird keine Aktivierungsfunktion angewendet
+            else:
+                raw_output = weighted_sum
+
             current_neuron.raw_output = raw_output
 
             # an jeden Nachfolger den gewichteten Wert weitergeben
@@ -161,8 +195,11 @@ class Network():
                     weighted_value = connection.weight * raw_output
                     child = connection.neuron_out
                     child.add_weighted_input(weighted_value)
-                    if child not in visited_neurons:
-                        queue.put(child)
+                    if child.id not in visited_neurons:
+                        # Nachfolger nur in Queue einfügen, wenn er alle input-Werte bereits erhalten hat
+                        expected_inputs = self.get_expected_inputs(child)
+                        if expected_inputs == len(child.current_weighted_inputs):
+                            queue.put(child)
 
         final_output = self.output_neurons[0].raw_output
         self.reset_neurons()
@@ -174,7 +211,7 @@ class Network():
         connection.set_random_weight()
 
     def apply_bias_weight_mutation(self):
-        neurons = self.get_all_neurons()
+        neurons = self.hidden_neurons + self.output_neurons
         neuron = random.choice(neurons)
         neuron.mutate_bias_weight()
 
@@ -190,21 +227,12 @@ class Network():
 
 
     def __str__(self):
-        output = "Network: "
-        # output += "Connections: "
-        # for connection in self.connections:
-        #     output += str(connection)
-        # output += "Input-Neurons: "
-        # for neuron in self.input_neurons:
-        #     output += str(neuron.id) + " "
-        # output += "Hidden-Neurons: "
-        # for neuron in self.hidden_neurons:
-        #     output += str(neuron.id) + " "
-        # output += "Output-Neurons: "
-        # for neuron in self.output_neurons:
-        #     output += str(neuron.id) + " "
-        
-        output += "Raw Fitness: " + str(self.raw_fitness)
+        output = "Connections: "
+        for c in self.connections:
+            if c.enabled:
+                output += str(c)
+
+        output += " Fitness " + str(self.raw_fitness)
 
         return output
     
