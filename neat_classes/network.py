@@ -81,7 +81,6 @@ class Network():
             for hidden_neuron_2 in self.hidden_neurons:
                 all_possible_connections.append([hidden_neuron_1.id, hidden_neuron_2.id])
 
-
         # remove already existing connections (only enabled ones)
         for connection in [c for c in self.connections if c.enabled]:
             existing_conn = [connection.neuron_in.id, connection.neuron_out.id]
@@ -99,7 +98,6 @@ class Network():
         for connection in all_possible_connections:
             if connection[0] == connection[1]:
                 all_possible_connections.remove(connection)
-
 
         if len(all_possible_connections) == 0:
             return
@@ -201,10 +199,10 @@ class Network():
                         if expected_inputs == len(child.current_weighted_inputs):
                             queue.put(child)
 
-        final_output = self.output_neurons[0].raw_output
+        output = self.output_neurons[0].raw_output
         self.reset_neurons()
 
-        return final_output
+        return output
     
     def apply_random_weight_mutation(self):
         connection = random.choice(self.connections)

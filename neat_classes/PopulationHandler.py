@@ -1,35 +1,34 @@
 from .network import Network
 from neat_classes.HistoricalMarker import HistoricalMarker
 from .species import Species
-import random
-import time
+import json
 import copy
 
-c1 = 1.0
-c2 = 1.0
-c3 = 0.4
-species_survival_rate = 20 # percentage of fittest networks that survive each generation
-elit_nets_amount = 2 # amount of fittest networks, that are elit and are copied to the next generation
+with open("config.json", "r") as f:
+    config = json.load(f)
 
-mutation_offspring_rate = 70 # mutation of connection weight
-weight_mutation_perturbation_rate = 10
-weight_mutation_random_value_rate = 10
-bias_weight_mutation_rate = 10
+c1 = config["c1"] # parameter to adjust influence of adjoint gene amount in compatibilty distance calculation
+c2 = config["c2"] # parameter to adjust influence of excess gene amount in compatibilty distance calculation
+c3 = config["c3"] # parameter to adjust influence of average weight difference in compatibilty distance calculation
+species_survival_rate = config["species_survival_rate"] # percentage of fittest networks in each species that survive each generation
+elit_nets_amount = config["elit_nets_amount"] # amount of fittest networks, that are elit and are copied to the next generation
+mutation_offspring_rate = config["mutation_offspring_rate"] # amount of species children that are created by mutations
+crossover_offspring_rate = config["crossover_offspring_rate"] # amount of species children that are created by crossovers
+weight_perturbation_prob = config["weight_perturbation_prob"] # chance of a connection weight being mutated with perturbation
+weight_mutation_random_value_prob = config["weight_mutation_random_value_prob"] # chance of a connection weight being mutated by setting it to a random value
+bias_weight_mutation_prob = config["bias_weight_mutation_prob"] # chance of a bias in a random neuron in a network being perturbarted
 
-crossover_offspring_rate = 30
-gene_disabled_rate = 75 # gene stays disabled if it was disabled in either parent at offspring
-
-new_neuron_probability = 20 # percent
-new_connection_probability = 30 # percent
-
-species_similarity_threshold = 3.0 # je höher, desto mehr netzwerke gehen in eine Spezies
-stagnation_treshold = 10 # amount of generation a species survives without fitness improvements
+gene_disabled_rate = config["gene_disabled_rate"] # chance of inherited connection staying disabled if it is disabled in either parent (crossover)
+new_neuron_prob = config["new_neuron_prob"] # chance a new hidden neuron is added to a network
+new_connection_prob = config["new_connection_prob"] # chance of a new connectino being added to a network
+species_similarity_threshold = config["species_similarity_threshold"] # threshold for compatibilty between networks (the higher the treshold the more networks are in a species)
+stagnation_treshold = config["stagnation_treshold"] # amount of generations a species survives without fitness improvements
 
 class PopulationHandler():
-    def __init__(self):
-        self.network_amount = 150
-        self.input_neurons = 2
-        self.output_neurons = 1
+    def __init__(self, initial_network, input_neurons, output_neurons):
+        self.network_amount = initial_network
+        self.input_neurons = input_neurons
+        self.output_neurons = output_neurons
         self.species: list[Species] = []
         self.hist_marker = HistoricalMarker(self.input_neurons + self.output_neurons) # hidden neuron IDs start after IDs for input and output neurons
 
@@ -52,7 +51,7 @@ class PopulationHandler():
     def start_evolution_process(self):
         generation_counter = 0
         best_network = None
-        while generation_counter < 100:
+        while best_network == None or best_network.raw_fitness < 0.9:
             # get sum of all average adjusted fitnesses of all species
             print("********** Generation ", generation_counter, " **********")
             adjusted_fitness_all_species = 0
@@ -83,12 +82,12 @@ class PopulationHandler():
                 children, elit_networks = species.produce_offspring(
                     species_children_amount,
                     mutation_offspring_rate,
-                    weight_mutation_perturbation_rate,
-                    weight_mutation_random_value_rate,
-                    bias_weight_mutation_rate,
+                    weight_perturbation_prob,
+                    weight_mutation_random_value_prob,
+                    bias_weight_mutation_prob,
                     crossover_offspring_rate,
-                    new_neuron_probability,
-                    new_connection_probability,
+                    new_neuron_prob,
+                    new_connection_prob,
                     self.hist_marker,
                     elit_nets_amount,
                     gene_disabled_rate
@@ -139,7 +138,6 @@ class PopulationHandler():
             generation_counter += 1
 
         best_network.reset_neurons()
-        network_found = True
         print("Best network: ", best_network)
         print("Input   |   Raw Output   |   Rounded Ouput")
         print(f" 0 0    |       {round(best_network.compute_inputs(0,0), 2)}     |   {round(best_network.compute_inputs(0,0))}")

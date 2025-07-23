@@ -8,7 +8,7 @@ class Neuron():
         self.raw_output = 0
         self.bias_weight = random.uniform(-20.0, 20.0)
         self.bias = bias
-        self.bias_perturbation_strength = 0.5
+        self.bias_perturbation_strength = 2.0
 
     def calculate_output(self, input, activation_function):
         if activation_function == "modified-sigmoid":
